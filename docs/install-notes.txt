@@ -1,0 +1,190 @@
+Boot from Ubuntu Server 10.04 32-bit(!) Installation DVD, making sure it's not 
+a rewritable disk - the drive is too old to boot from it.
+Install Ubuntu Server, selecting all defaults until defining the hostname:
+Hostname: safedns[12] (1 or 2 depending on which node it is)
+Partitioning: Guided - use entire disk (no LVM)
+Partition disks: confirm that changes should be written to disk (at both 
+partition and formatting prompts).
+Base system will be installed.
+Create a user account for the user "security"
+Managing updates: select automatic security updates
+Software selection: Install LAMP and OpenSSH.
+Set password for MySQL "root" user
+After reboot
+----
+In case of error "Gave up waiting for root device" occurs:
+type "exit" at (initfs) prompt
+sudo vi /etc/default/grub
+change:
+GRUB_CMDLINE_LINUX_DEFAULT="quiet" to
+GRUB_CMDLINE_LINUX_DEFAULT="rootdelay=90 quiet splash"
+and then run:
+sudo update-grub
+exit
+
+(Settings that were attempted but ruled out were: BIOS set so Embedded AIC-7899,
+A::00 SEAGAGE ST3146707LC is before System BIOS boot devices in the Hard-Disk 
+Drive Sequence; and Hard Disk first in boot order)
+
+----
+Log in as security
+sudo aptitude safe-upgrade (answering Y to any prompts about installing pkgs)
+sudo reboot
+
+SSH in as security
+sudo passwd root
+[set password]
+
+If not added already, or user security has wrong permissions, here's how
+to create the user manually:
+- sudo useradd -c "Info Security" -m -r -s /bin/bash security
+- sudo usermod -G adm,dialout,cdrom,plugdev,lpadmin,sambashare,admin security
+- sudo passwd security
+
+configure etc/network/interfaces, including iptables (see files from dist) 
+[follow directions in dist/README to install distribution]
+
+Install BIND
+Decide on version of BIND:
+- BIND 9.8.0 (!) was released on March 1, 2011, with some support for DLZs.
+As of March 10, 2011, it may be too early to deploy this version in production.
+- BIND 9.7.1 fails to start/run when DLZ is enabled
+Mar 11 10:36:34 safedns1 named[19447]: Loading 'Mysql zone' using driver mysql
+Mar 11 10:36:34 safedns1 named[19447]: Required token %zone% not found.
+Mar 11 10:36:34 safedns1 named[19447]: Could not build find zone query list
+Mar 11 10:36:34 safedns1 named[19447]: mysql driver could not create database in
+stance object.
+Mar 11 10:36:34 safedns1 kernel: [675814.157351] named[19451]: segfault at 2c ip
+ 00a280d6 sp b6003ea0 error 4 in named[9c9000+76000]
+
+- BIND 9.6-ESV-R2 works with DLZ, but it's not available via source from apt-get
+
+So install 9.6-ESV-R2 from source and enable DLZ:
+mkdir -p /usr/local/src/bind9
+cd /usr/local/src/bind9
+apt-get install fakeroot bison dpkg-dev
+apt-get install libkrb5-dev debhelper libssl-dev libtool libdb-dev libldap2-dev libxml2-dev libcap2-dev hardening-wrapper libgeoip-dev libmysqlclient-dev
+dpkg -i *.deb
+apt-get source bind9
+cd bind9-9.7.0.dfsg.P1
+vi debian/rules
+  #(make sure --with-dlz-mysql is on the configure line, deleting =no from
+#the line, not changing to =yes or =/usr/bin/mysql or anything else!)
+wget http://ftp.isc.org/isc/bind9/9.6-ESV-R3/bind-9.6-ESV-R3.tar.gz
+gunzip bind-9.6-ESV-R3.tar.gz
+tar xvf bind-9.6-ESV-R3.tar
+cd bind-9.6-ESV-R3
+./configure --prefix=/usr --mandir=/usr/share/man --infodir=/usr/share/info --sysconfdir=/etc/bind --localstatedir=/var --enable-threads --enable-largefile --with-libtool --enable-shared --enable-static --with-openssl=/usr --with-gssapi=/usr --with-gnu-ld --with-dlz-postgres=no --with-dlz-mysql --with-dlz-bdb=yes --with-dlz-filesystem=yes --with-dlz-ldap=yes --with-dlz-stub=yes --with-geoip=/usr --enable-ipv6 'CFLAGS=-fno-strict-aliasing -DDIG_SIGCHASE -O2' 'LDFLAGS=-Wl,-Bsymbolic-functions' 'CPPFLAGS='
+make
+make install
+mkdir /var/cache/bind
+chown root:bind /var/cache/bind
+# with dist unpacked into ~security/dist:
+cd /etc/bind
+cp ~security/dist/etc/bind/named.conf.options_1 .
+ln -s named.conf.options_1 named.conf.options
+mkdir /var/log/named
+chown bind /var/log/named
+# Edit dist, changing safedns.security in dns_records_[12].sql to current hostname
+Create and populate database objects:
+mysql --user=root --password
+[enter password defined when MySQL was installed]
+\. /home/security/dist/database/db.sql
+\. /home/security/dist/database/dns_records_1.sql
+\. /home/security/dist/database/dns_records_2.sql
+\. /home/security/dist/database/insert_1.sql
+\. /home/security/dist/database/insert_2.sql
+
+Edit root's crontab: sudo crontab -u root -e
+Adding
+41 1 * * * /root/safedns/update/load_malware_domains.sh > /root/safedns/update/last_load.log 2>&1
+
+Prepare /root directory (as security):
+cd ~/root
+sudo cp -r safedns /root
+
+service bind9 start
+
+sudo cp ~security/dist/usr/local/sbin/* /usr/local/sbin
+sudo mkdir /var/log/named/domains
+[change seed_host in /root/safedns/update/validate_and_load_alt.pl]
+
+Install ntpd
+sudo apt-get install openntpd
+# set servers in /etc/openntpd/ntpd.conf:
+server server.school.edu 
+HUP ntpd
+
+Install security and root crontabs from dist
+
+Install php:
+Install apt-file (apt-get install apt-file)
+apt-file update
+apt-get install php5 php5-cli
+
+Install curl:
+apt-get install php5-curl
+
+# Install File::Grep 
+cpan -i File::Grep
+# Install git 
+apt-get install git-core
+
+# Install OSSEC:
+cd /usr/local/src/ossec
+gunzip -c ossec-hids-2.5.1.tar.gz | tar xvf -
+cd ossec-hids-2.5.1/
+./install.sh 
+/etc/init.d/ossec start
+
+Run nikto from another host; identified outdated Apache (2.2.14) but apt-get -s upgrade doesn't update it; dpkg --list does show apache2 as being installed.
+
+Add second disk so that fdisk /dev/sdb reports this (within a cylinder):
+   Device Boot      Start         End      Blocks   Id  System
+/dev/sdb1   *           1       17120   137516368+  83  Linux
+/dev/sdb2           17121       17849     5855692+   5  Extended
+/dev/sdb5           17121       17849     5855661   82  Linux swap / Solaris
+
+mkfs.ext3 -L /backup /dev/sdb1
+mkdir /backup
+vi /etc/fstab
+#add line for /dev/sdb1, mounted on /backup:
+/dev/sdb1	/backup		auto	defaults	0	0
+mount /backup
+
+Copy distribution backup off of systems, saving to probe:~security/backup
+
+# make backup copy of installation
+dump -0 -f - /dev/sda1 | (cd /backup && restore -rf -)
+
+- Copy section of /boot/grub/grub.cfg to /etc/grub.d/40_custom,
+changing UUID to whatever blkid reports for the /backup partition. 
+- Edit /etc/default/grub, commenting out GRUB_HIDDEN_TIMEOUT=0 and
+setting GRUB_HIDDEN_TIMEOUT_QUIET to false.
+- sudo update-grub
+- Edit /backup/etc/fstab, setting UUIDs to point to the backup disk root and swap
+- Reboot, testing booting from backup partition.
+
+apt-get install perl-doc
+
+Create /etc/rsyslog.d/30-iptables.conf to redirect iptables DNS log messages
+to /var/log/iptables.log (only) for ease of log review and processing of stats.
+
+*** Note - rsyslogd does NOT reread its configuration files upon HUP. Must
+send TERM instead.
+
+apt-get install rcs
+
+Add /var/log/iptables.log to /etc/logrotate.d/rsyslog after /var/log/messages
+
+To bring up secondary interface:
+Configure the IP address you want added in /etc/network/interfaces as eth0:2
+ifup eth0:2
+
+To bring down secondary interface:
+ifdown eth0:2
+
+To move IP address between hosts:
+ifdown eth0:2 # on FROM host
+ifup eth0:2 # on TO host
+arping -U -I eth0 [IP]

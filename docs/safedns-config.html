@@ -1,0 +1,567 @@
+<!DOCTYPE HTML PUBLIC '-//W3C//DTD HTML 4.01 Transitional//EN'>
+<html>
+<head>
+<meta http-equiv='content-type' content='text/html; charset=iso-8859-1'>
+<title>SafeDNS Configuration Details</title>
+
+<meta http-equiv='content-type' content='text/html; charset=iso-8859-1'>
+</head>
+
+<body>
+<h2>SafeDNS Configuration Details</h2>
+
+<h3>Table of Contents</h3>
+<p>
+<a href="#notes">Important Notes</a><br>
+<a href="#overview">Overview</a><br>
+<a href="#triage">Triage</a><br>
+<a href="#failover">Failover</a><br>
+<a href="#creds">Credentials</a><br>
+<a href="#cron">Cron</a><br>
+<a href="#mdlp">Malware Domain Load</a><br>
+<a href="#files">System Files</a><br>
+<a href="#tasks">Frequent Tasks</a><br>
+<a href="#db">Database Structure</a><br>
+<a href="#database">Manual DB Mods</a><br>
+<a href="#os">General Admin Refs</a><br>
+<a href="#services">Services</a><br>
+<a href="#log">Logging</a><br>
+<a href="#patches">Security Updates</a> <br>
+<a href="#build">Server Build</a> <br>
+<a href="#trouble">Troubleshooting</a><br>
+<a href="#errors">Obscure Errors</a><br>
+</p>
+<h3>Important Notes</h3><a name="notes"></a>
+The DNS service (BIND) must 
+<ul>
+<li>be kept at a version that actually works with
+Dynamically-Loadable Zones (DLZ) using the MySQL database, which is why 
+BIND 9.6-ESV-R2 was built from source (package was not available). 
+BIND 9.8.0 contains some support for DLZs but was not tested due to its 
+being an early release as of the date the server was built. 
+BIND 9.7.1 is known not to work (it fails to start or run with DLZ enabled).
+<li>Your system may require that BIND run single-threaded (named -n 1) - if
+you find that it crashes when doing performance testing, it may be that
+it cannot handle queries in parallel;
+</ul>
+<h3>Overview</h3><a name="overview"></a>
+<p>
+The SafeDNS service consists of two hosts:<br>
+<pre>
+safedns1.domain
+safedns2.domain
+</pre>
+running DNS (BIND) with Dynamically-Loadable Zones (DLZ) using MySQL as
+the repository for domain names. This is necessary due to the large (~300,000)
+number of them. The list of malware domains is updated nightly.
+</p>
+<p>
+<em>However</em>, DNS service is actually advertised as being on the virtual
+interfaces named:<br>
+<pre>
+safedns1-svc.domain
+safedns2-svc.domain
+</pre>
+which as of this writing, were A1.B1.C1.D1 and A2.B2.C2.D2, respectively.
+<p>
+A web server (Apache) is also running. Any requests made to the web server for
+a malicious domain it claims to be hosting will be fetched from the actual
+malicious host on a nightly basis, for later analysis.
+</p>
+<p>
+Services are restricted to campus subnets using iptables. 
+</p>
+<h3>Triage</h3><a name="triage"></a>
+<p>
+If DNS isn't running, it can be restarted like this:
+<pre>
+/usr/sbin/named -u bind -n 1
+</pre>
+See also <a href="#trouble">Troubleshooting</a>, below.
+</p>
+
+<h3>Network Configuration</h3>
+Each SafeDNS server has two interfaces defined in 
+<tt>/etc/network/interfaces</tt>: 
+<ul>
+<li><b><tt>eth0</tt></b>: 
+<ul>
+<li>primary interface
+<li>NOT published/announced to users
+<li>automatically configured at boot 
+<li>safedns[12].domain
+<li>persistent address regardless of role the server is playing (primary
+or secondary)
+<li>the address you should connect to when moving interfaces 
+around when doing a failover
+</ul>
+<li><b><tt>eth0:1</tt></b>:
+<ul>
+<li>primary virtual interface
+<li>IS published/announced to users
+<li>automatically configured at boot 
+<li>safedns[12]-svc.domain
+<li>address that can be moved around, depending on role the server is 
+playing (primary or secondary)
+<li>NOT the address you should connect to when moving interfaces 
+around when doing a failover
+</ul>
+<li><b><tt>eth0:2</tt></b>:
+<ul>
+<li>secondary virtual interface
+<li>only published/announced to users as side effect of failover process
+<li>NOT automatically configured at boot 
+<li>safedns[12]-svc.domain
+<li>interface to bring up if failing over IP address
+<li>NOT the address you should connect to when moving interfaces 
+around when doing a failover
+</ul>
+</ul>
+<h3>Failover and Recovery</h3><a name="failover"></a>
+<h4>Fail primary or secondary service over to another host</h4>
+While failover happens at the client level, there may be a perceptible delay.
+To avoid this, fail service over to a working host:
+<ul>
+<li>Each system can assume the IP address of the other using the configuration in
+<tt>/etc/network/interfaces</tt>. Make sure there is a manual entry listing 
+the IP address to be added. 
+<li>To verify the state of things, make sure to review 
+<tt>/etc/network/interfaces</tt>
+and the output of <tt>ifconfig -a</tt> before moving the IP address around.
+</ul>
+<p>
+<h4>To take a host out of service generally</h4>
+<ul>  
+<li>Use <tt>dig @server_ip hostname</tt> for a few hosts (on-campus, 
+off-campus, malicious) to verify lookups happening correctly before 
+maintenance.
+<li>On personal workstation, start a ping of <tt>server_ip</tt>.
+<li>On the host to be taken out of service: <tt>ifdown eth0:1</tt> 
+<li>On the host to add <tt>server_ip</tt> to:<br>
+<tt>ifup eth0:2</tt> (takes a few seconds) <br>
+<tt>arping -U -I eth0 server_ip</tt> 
+<li>As soon as <tt>server_ip</tt> becomes pingable again press Ctrl-C to stop 
+the arping.
+<li>Use <tt>dig @server_ip hostname</tt> again to make sure DNS service is 
+working for that moved IP. If not, do <tt>rndc reload</tt> on the host where
+<tt>server_ip</tt> was added.
+<li><em>If out-of-service host needs to be rebooted:</em> change <tt>eth0:1</tt> entry from <tt>auto</tt> to <tt>manual</tt> in <tt>/etc/network/interfaces</tt> and reboot (takes about 4 minutes).
+</ul>
+<h4>To put a host back in service generally</h4>
+<ul>
+<li><em>If host was rebooted while out of service:</em> 
+<ul>
+<li>Change <tt>eth0:1</tt> entry back to <tt>auto</tt> in <tt>/etc/network/interfaces</tt>.
+<li>Run <tt>service bind9 start</tt> to start DNS service (it's configured
+in <tt>/etc/init/bind9.conf</tt> not to start unless both interfaces are up).
+<li>Use <tt>dig @server_ip hostname</tt> (where <tt>server_ip</tt> is the IP
+address associated with the eth0 interface of the host to be brought back in
+service!) for a few hosts (on-campus, off-campus, 
+malicious) to verify lookups happening correctly.
+</ul>
+<li>On the host to relinquish the IP: <tt>ifdown eth0:2</tt>
+<li>On the host to take back on the IP:<br>
+<tt>ifup eth0:1</tt> (takes a few seconds)<br>
+<tt>arping -U -I eth0 [IP_address being re-assumed]</tt> 
+<li>Press Ctrl-C to stop the <tt>arping</tt> when the IP address is pingable.
+<li>Do an <tt>rndc reload</tt> on both hosts for good measure (sometimes
+BIND doesn't handle the change of interfaces gracefully).
+<li>Use <tt>dig @server_ip hostname</tt> for a few hosts (on-campus, off-campus, 
+malicious) to verify lookups happening correctly after maintenance.
+<li>Use <tt>tail -f /var/log/iptables.log</tt> on both hosts to make sure 
+queries are being processed.
+</ul>
+</p>
+<h4>To boot from the backup root disk</h4>
+<p>
+Primary root disk is <tt>/dev/sda</tt>. Backup boot disk is <tt>/dev/sdb</tt>. 
+<ul>
+<li>From console, reboot. 
+<li>At GRUB screen (a list of bootable images) select the 
+very last one in the list.
+</ul>
+A reboot will automatically boot from the primary root disk.
+</p>
+<h4>To update the backup copy of the root disk</h4>
+<p>
+<pre>
+# obliterate whatever is on the backup disk now
+mkfs.ext3 -L /backup /dev/sdb1
+# mount the new filesystem on /backup
+mount /dev/sdb1 /backup
+# then dump the filesystem on the primary disk to the backup disk
+dump -0 -f - /dev/sda1 | (cd /backup && restore -rf -)
+</pre>
+</p>
+<h4>To install new version of BIND DNS</h4>
+<p>
+See instructions in the <a href="install-notes.txt">installation notes</a>, 
+from &quot;Install BIND&quot; through &quot;service bind9 start.&quot;
+</p>
+<h3>Users &amp; Passwords</h3><a name="creds"></a>
+<ul>
+<li><b>Users</b>: 
+<ul>
+<li><b>OS</b>: <tt>security</tt> (with sudo privs - it's convenient to use <tt>sudo -s</tt> to have a sudo shell). Other users were added automatically by 
+packages when they were installed. 
+<li><b>MySQL</b>: <tt>root</tt>, <tt>bind</tt>, and <tt>stat</tt>.
+</ul>
+</ul>
+
+<h3>Cron jobs</h3><a name="cron"></a>
+They are offset on safedns1 and safedns2 so that in case there's a problem
+detected with one, it might be detected in time to prevent it from propagating
+to the other.
+<h4>safedns1</h4>
+<pre>
+security:
+30 22 * * * /home/security/fetch/fetch-all
+00 23 * * * /home/security/analyze/analyze-feeds.pl
+
+root:
+41 1 * * * /root/safedns/update/load_malware_domains.sh > /root/safedns/update/last_load.log 2>&1
+0 22 * * * /bin/cp /var/log/apache2/custom.log /home/security/fetch; chown security /home/security/fetch/custom.log
+</pre>
+<h4>safedns2</h4>
+<pre>
+security:
+30 10 * * * /home/security/fetch/fetch-all
+00 11 * * * /home/security/analyze/analyze-feeds.pl
+
+root:
+41 13 * * * /root/safedns/update/load_malware_domains.sh > /root/safedns/update/last_load.log 2>&1
+0 10 * * * /bin/cp /var/log/apache2/custom.log /home/security/fetch; chown security /home/security/fetch/custom.log
+</pre>
+
+<h3>Malware Domain Load Process</h3><a name="mdlp"></a>
+<p>
+<b><tt>/root/safedns/update</tt></b> contains the supporting scripts and configuration files for the SafeDNS service, of which
+<b><tt>load_malware_domains.sh</tt></b> runs daily from root's cron:
+<ul>
+<li>Downloading the latest copy of the malware domain lists from Malware Domains, Zeus Tracker, SRI's Most Observed Malware-Related DNS Names, and REN-ISAC;
+<li>Adding hostnames from blacklist.txt, removing those from whitelist.txt, 
+and removing school.edu;
+<li>Doing a sanity check to make sure the new lists don't differ by more than 
+25% from the previous day's; and
+<li>Loading the records into MySQL, and reloading DNS if appropriate. 
+<ul>
+<li>Two tables are used alternately
+in MySQL, so one table can be used for production queries while the other 
+has its records deleted and then populated. 
+<li>After they are populated, BIND
+is told to use the configuration file that points to the updated table. 
+</ul>
+<li>Note: there is a hidden dependency in the script - when it does a wget of the REN-ISAC
+feed, it uses the credentials configured in <tt>/root/.wgetrc</tt>. If you try 
+to run the wget using sudo, the credentials in <tt>~security/.wgetrc</tt> will 
+be used instead.
+<li>The Apache logs are copied to the security user's directory daily,
+for processing by its analyze-feeds.pl cron job (see above). This tracks
+which requested domains appeared in which feed, for later determination of
+false positives and false negatives.
+<li><b><tt>blacklist.txt</tt>:</b> contains fully-qualified hostnames or domains to blacklist manually (i.e. in addition to those provided by the automated feeds);
+<li><b><tt>whitelist.txt</tt>:</b> contains fully-qualified hostnames or domains to be whitelisted, aside from school.edu, which is already whitelisted via the script that 
+builds the malware domain list
+<li><b><tt>validate_and_load_alt.pl</tt>:</b> this is called from load_malware_domains.sh; it 
+validates the names to ensure they're well-formed (to prevent mischief) and 
+adds them to the local MySQL database, associating them with a pre-defined IP 
+address (of the walled garden web server, as defined in the script). 
+</ul>
+
+<h3>System Files Customized or Added </h3><a name="files"></a>
+<p>
+The files customized or added in order to configure the system are on 
+<tt>probe:~security/backup/safedns/safedns[12]-preprod-dist.tar</tt>. The list of 
+installed packages is in the same directory, as <tt>dpkg.list</tt> (which is 
+the output of <tt>dpkg --list</tt>).
+</p>
+<table border=1>
+<tr><th>File</th><th>Purpose</th></tr>
+<tr><td>/etc/default/grub </td><td> add delay to allow SCSI root device to be detected at boot, 
+and add ability to select boot image</td></tr>
+<tr><td>/etc/bind </td><td> configuration files for BIND DNS service</td></tr>
+<tr><td>/etc/grub.d/40_custom </td><td> add booting from backup disk</td></tr>
+<tr><td>/etc/iptables.rules </td><td> limits services to cmapus</td></tr>
+<tr><td>/etc/logrotate.d/rsyslog </td><td> add log rotation for iptables.log
+<tr><td>/etc/rsyslog.d/30-iptables.conf </td><td> redirect iptables DNS logs messages so they don't clutter up syslog or kern.log</td></tr>
+<tr><td>/etc/iptables.rules</td><td>Allows all campus connections to HTTP, DNS (TCP and UDP), and the time protocol. Logs each DNS connection.</td></tr>
+<tr><td>/etc/apache2/httpd.conf</td><td>Defines page to show for File Not Found error (virtually all requests)</td></tr>
+<tr><td>/etc/apache2/apache2.conf</td><td>Defines ErrorLog so the Referer is removed</td></tr>
+<tr><td>/etc/apache2/conf.d/security</td><td>Limits ServerToken information returned</td></tr>
+<tr><td>/etc/apache2/sites-available/default</td><td>Defines CustomLog to log aggregated referer information in MySQL</td></tr>
+<tr><td>/etc/init.d/bind9 </td><td> this is for backward compatiblity, but AFAIK isn't used</td></tr>
+<tr><td>/etc/resolv.conf </td><td> uses campus DNS servers for resolving server-initiated requests</td></tr>
+<tr><td>/etc/openntpd/ntpd.conf </td><td> for synchronization with campus time servers</td></tr>
+<tr><td>/etc/network/interfaces </td><td> defines primary network interface (comes up automatically) and virtual interface (comes up manually when ifup is run)</td></tr>
+<tr><td>/etc/init/bind9.conf </td><td> This tells init to start BIND DNS, after startingMySQL, both eth0 and eth0:1 interfaces are up, and to start with only 1 thread</td></tr>
+<tr><td>/etc/bind/named.conf.options_1 </td><td> tells BIND DNS to query dns_records_1 table in MySQL malware_domains database, and then forward unresolved queries to campus DNS servers. Also prevents DNS from logging queries it receives (for privacy).</td></tr>
+<tr><td>/etc/bind/named.conf.options_2 </td><td> like _1, but uses dns_records_2 table.</td></tr>
+<tr><td>/etc/bind/named.conf.options </td><td> points to either _1 or _2, depending on which
+table contains current records. Link is changed by /root/safedns/update/load_malware_domains.sh via cron.</td></tr>
+<tr><td>/etc/fstab </td><td> defines primary and backup disk mount points. To determine UUID for
+a given filesystem, use blkid</td></tr>
+<tr><td>/home/security/.wgetrc </td><td> used by /root/safedns/update/load_malware_domains.sh 
+when downloading REN-ISAC feed, but ONLY if run using sudo. The corresponding 
+file in /root is used normally.</td></tr>
+<tr><td>/home/security/dist/dist.orig/database/dns_records_2.sql </td><td> used at build to create dns_records_2 table in MySQL</td></tr>
+<tr><td>/home/security/dist/dist.orig/database/dns_records_1.sql </td><td> used at build to create dns_records_1 table in MySQL</td></tr>
+<tr><td>/home/security/dist/dist.orig/database/stat.sql </td><td> used at build to create statistics table for tracking obfuscated Referer information</td></tr>
+<tr><td>/home/security/dist/README </td><td> describes how to install dist files</td></tr>
+<tr><td>/home/security/analyze/analyze-feeds.pl </td><td> runs daily at 11:00PM, taking the 
+output of fetch-all and logging whichever malware domain list source 
+contained each domain request logged by Apache</td></tr>
+<tr><td>/home/security/dist-backup/dpkg-list </td><td> list of packages installed using 'apt-get install'</td></tr>
+<tr><td>/home/security/fetch/fetch-all </td><td> fetch-all runs daily at 10:30PM, fetching 
+potential malware based on HTTP requests logged by Apache.</td></tr>
+<tr><td>/root/.wgetrc </td><td> used by /root/safedns/update/load_malware_domains.sh when 
+downloading REN-ISAC feed via root cron - but NOT if running manually as
+security or with sudo. </td></tr>
+<tr><td>/root/safedns/update/blacklist.txt </td><td> contains domains that should be blocked
+on an ongoing basis. Used by update_malware_domains.sh to populate MySQL tables
+referenced by BIND DNS</td></tr>
+<tr><td>/root/safedns/update/whitelist.txt </td><td> contains domains that should be allowed
+on an ongoing basis. Used by update_malware_domains.sh to populate MySQL tables
+referenced by BIND DNS</td></tr>
+<tr><td>/root/safedns/update/load_malware_domains.sh </td><td> malware domain load script. See 
+<a href="#mdlp">Malware Domain Load Process</a> section above.</td></tr>
+<tr><td>/root/safedns/update/validate_and_load_alt.pl </td><td> called by load_malware_domains.sh</td></tr>
+<tr><td>/root/safedns/update/README</td><td> describes details for malware domain load
+process, including manual workarounds and database tweaks</td></tr>
+<tr><td>/root/safedns/update/compare.pl </td><td> called by valid_and_load_alt.pl to report
+if the volume of changes in malware domain lists from one day to another is 
+within 25%</td></tr>
+<tr><td>/var/spool/cron/crontabs/root </td><td> root crontab</td></tr>
+<tr><td>/var/spool/cron/crontabs/security </td><td> security crontab</td></tr>
+<tr><td>/var/log/named/domains </td><td> archive of prior malware domain lists</td></tr>
+<tr><td>/var/ossec/rules/local_rules.xml </td><td> configures checks for disk space and load</td></tr>
+<tr><td>/var/ossec/etc/ossec.conf </td><td> generic OSSEC config, with email addresses used 
+for notification, no active responses configured, probe used as SMTP server</td></tr>
+<tr><td>/var/www/index.html </td><td> web page served by Apache for all request, including not found</td></tr>
+<tr><td>/usr/local/sbin/prune-error </td><td> used by Apache configuration to remove referer from error log</td></tr>
+<tr><td>/usr/local/sbin/count-dns-hits </td><td> generates report of number of clients using
+DNS service, and number of queries per hour; not run automatically as of 2011-06-02</td></tr>
+<tr><td>/usr/local/sbin/aggregate-referer </td><td> used by Apache configuration to take
+referer information, and insert or update database entry to log number of 
+referers from a particular domain each day</td></tr>
+</table>
+
+<h3>Frequent Tasks</h3><a name="tasks"></a>
+<p>
+Instructions for blacklisting, whitelisting, refreshing a DNS record, 
+and rebooting are detailed 
+<a href="safedns-tasks.html">here</a>.
+</p>
+<h3>Database Structure</h3><a name="db"></a>
+<ul>
+<li><a href="malware_domains.sql">malware_domains.sql</a> defines the tables
+in the database malware_domains (dns_records_1 &amp; dns_records_2) and the
+associated procedures (insert_1 and insert_2).
+<li><a href="statistics.sql">statistics.sql</a> defines the table
+in the database statistics (referers) and the
+associated procedure (increment_count).
+</ul>
+<h3>Manual Database Modifications</h3><a name="database"></a>
+<p>
+<b>To log into MySQL</b> to manipulate the database manually, log into 
+safedns[12].domain and connect to mysql:
+<pre>
+mysql --user=bind --password
+[enter password as defined in /etc/bind/named.conf.options]
+use malware_domains;
+[enter SQL commands, then type quit to exit]
+</pre>
+</p>
+<p>
+<b>To remove a particular host or domain</b> X.Y.Z from the database (i.e. remove it 
+from the blacklist), after connecting to MySQL (see above):
+<pre>
+delete from dns_records
+where zone like 'X.Y.Z';
+</pre>
+and then (if desired) add it to the whitelist.txt file to prevent it from being 
+re-added during the nightly load.
+</p>
+<p>
+<b>To remove ALL records</b> from the database (to start from scratch, although leaving
+users exposed), after connecting to MySQL (see above):
+<pre>
+delete from dns_records;
+</pre>
+</p>
+<p>
+<b>To re-populate the database</b> using the current malware domain list, log into
+safedns[12].domain, and as root, run 
+<tt>/root/safedns/update/load_malware_domains.sh</tt>.
+</p>
+
+<h3>General Administration References</h3><a name="os"></a>
+<dl>
+<dt>Ubuntu
+<dd><a href="ubuntu-admin.pdf">Systems Administration Guide</a>, 
+<a href="https://help.ubuntu.com/community/SwitchingToUbuntu/FromLinux/%20RedHatEnterpriseLinuxAndFedora">Quick Ref</a> (especially package mgmt tasks)
+<dt>BIND DNS
+<dd><a href="Bv9ARM.pdf">BIND 9 Administrator Reference Manual</a>
+<dt>dpkg-query -s PKG
+<dd>list status of PKG (e.g. is bind9 installed), but must the package name
+as known by Ubuntu. In the case of bind9, safedns1 will report deinstall ok 
+config-files, while safedns2 will report that it is not installed and no 
+info is available.
+<dt>
+</dl>
+
+<h3>Services</h3><a name="services"></a>
+<table border=1>
+<tr>
+<th>Name</th>
+<th>Availability</th>
+<th>Process</th>
+<th>Startup Script</th>
+<th>Config</th>
+<th>Start/Stop/Reload Config</th>
+<th>Log</th>
+</tr>
+<tr>
+<td>DNS</td>
+<td>campus</td>
+<td><tt>/usr/sbin/named -u bind -n 1</tt></td>
+<td><tt>/etc/init/bind9.conf</tt></td>
+<td><tt>/etc/bind</tt></td>
+<td><tt>service bind9 [stop|start]</tt><br><tt>/usr/sbin/rndc reload</tt></td>
+<td><tt>/var/log/named</tt></td>
+</tr>
+<tr>
+<td>MySQL</td>
+<td>on-host</td>
+<td><tt>/usr/sbin/mysqld</tt></td>
+<td><tt>/etc/init/mysql.conf</tt></td>
+<td><tt>/etc/mysql/conf.d</tt></td>
+<td><tt>service mysql [start|stop]</tt></td>
+<td><tt>/var/log/mysql</tt></td>
+<tr>
+<td>HTTP</td>
+<td>campus</td>
+<td><tt>/usr/sbin/apache2 -k start</tt></td>
+<td><tt>/etc/init.d/apache2</tt></td>
+<td><tt>/etc/apache2</tt></td>
+<td><tt>service apache2 [start|stop|reload]</tt></td>
+<td><tt>/var/log/apache2</tt></td>
+</tr>
+<tr>
+<td>OSSEC</td>
+<td>on-host</td>
+<td><tt>/var/ossec/bin/*</tt></td>
+<td><tt>/etc/init.d/ossec</tt></td>
+<td><tt>/var/ossec/etc/ossec.conf</tt></td>
+<td><tt>/var/ossec/bin/ossec-control [start|stop|restart]</tt></td>
+<td><tt>/var/ossec/logs</tt></td>
+<tr>
+<td>iptables</td>
+<td>on-host</td>
+<td>in kernel</td>
+<td>automatic</td>
+<td><tt>/etc/iptables.rules</tt></td>
+<td><tt>iptables-restore</tt></td>
+<td><tt>/var/log/iptables.log</tt></td>
+</tr>
+<tr>
+<td>sshd</td>
+<td>subnets allowed via iptables</td>
+<td><tt>/usr/sbin/sshd -D</tt></td>
+<td><tt>/etc/init/ssh.conf</tt></td>
+<td><tt>/etc/ssh/sshd_config</tt></td>
+<td><tt>service ssh [start|stop]</tt></td>
+<td><tt>/var/log/daemon.log, auth.log</tt></td>
+</tr>
+<tr>
+<td>openntpd</td>
+<td>campus network</td>
+<td><tt>/usr/sbin/ntpd</tt></td>
+<td><tt>/etc/init.d/openntpd</tt></td>
+<td><tt>/etc/openntpd/ntpd.conf</tt></td>
+<td><tt>service openntpd [start|stop|restart]</tt></td>
+<td><tt>/var/log/daemon.log, syslog</tt></td>
+</tr>
+</table>
+<h3>Logging</h3><a name="log"></a>
+<ul>
+<li><b>DNS queries:</b> There is a line in <tt>safedns[12]:/var/log/iptables.log</tt> for 
+each DNS query received, identifying only the client's IP and MAC address, 
+not the content of the query itself. Entries look like this:
+<blockquote>
+Nov 30 10:29:28 safedns kernel: [1016208.782262] iptables DNS: IN=eth0 OUT= MAC=00:30:48:d2:68:96:00:1e:f7:f6:e1:40:08:00 SRC=x.x.x.x DST=A2.B2.C2.D2 LEN=69 TOS=0x00 PREC=0x00 TTL=252 ID=11177 PROTO=UDP SPT=53080 DPT=53 LEN=49 
+</blockquote>
+<li><b>HTTP requests:</b> each request for a malware domain URL is logged to
+<tt>safedns:/var/log/apache2/custom.log</tt>.
+<li><b>Referers:</b> are added to a MySQL table (via a CustomLog directive
+in the Apache configuration), but the only other identifying information is
+the day, with the intention of breaking correlation with the more granualar
+query information in the Apache logs. The is the <a href="referer-insert.txt">relevant SQL</a>.
+</ul>
+
+<h3>Security Updates</h3><a name="patches"></a> 
+<p>
+Updates are installed automatically on a daily basis, although any 
+required reboots are not. 
+These settings are defined in <tt>safedns[12]:/etc/apt/apt.conf.d/10periodic</tt> and <tt>safedns:/etc/apt/apt.conf.d/50unattended-upgrades</tt>. See 
+<a href="https://help.ubuntu.com/community/AutomaticSecurityUpdates">Ubuntu 
+Documentation</a> for more information.
+</p>
+<h3>Server Build</h3><a name="build"></a> 
+<ul>
+<li><b>DNS:</b> Build Bind (DNS) to use Dynamically-Loadable Zones (DLZ), 
+with MySQL as the datbase back-end using 
+<a href="http://ubuntuforums.org/showthread.php?t=823578">Ubuntu Forums 
+document</a> or this <a href="bind-dlz-build.html">cached version</a> (as of 2010-12-16).
+<li><b>Step-by-step:</b> for details about how the servers were built,
+see the <a href="install-notes.txt">installation notes</a>.
+</ul>
+<h3>Troubleshooting</h3><a name="trouble"></a>
+<table border=1>
+<tr>
+<th>Symptom</th>
+<th>Cause</th>
+<th>Action</th>
+</tr>
+<tr>
+<td>DNS responding to some domain requests but not others, e.g. cached requests
+but new requests</td>
+<td>BIND not seeing network properly</td>
+<td><tt>rndc reconfig</tt></td>
+</tr>
+</table>
+<h3>Obscure Errors that were Fixed</h3><a name="errors"></a>
+<h4>Gave up waiting for root device</h4>
+<p>
+This occurred when building the system, and was because SCSI disks take
+longer to spin up, and the BIOS wasn't waiting long enough. To fix:
+<pre>
+type "exit" at (initfs) prompt
+sudo vi /etc/default/grub
+change:
+GRUB_CMDLINE_LINUX_DEFAULT="quiet" to
+GRUB_CMDLINE_LINUX_DEFAULT="rootdelay=90 quiet splash"
+and then run:
+sudo update-grub
+exit
+</pre>
+</p>
+<h4>BIND fails to start/run when DLZ is enabled</h4>
+<p>
+Log indicates:
+<pre>
+Mar 11 10:36:34 safedns1 named[19447]: Loading 'Mysql zone' using driver mysql
+Mar 11 10:36:34 safedns1 named[19447]: Required token %zone% not found.
+Mar 11 10:36:34 safedns1 named[19447]: Could not build find zone query list
+Mar 11 10:36:34 safedns1 named[19447]: mysql driver could not create database in
+stance object.
+Mar 11 10:36:34 safedns1 kernel: [675814.157351] named[19451]: segfault at 2c ip
+ 00a280d6 sp b6003ea0 error 4 in named[9c9000+76000]
+</pre>
+This is known to happen with BIND version 9.7.1, and may occur with other
+versions. As of June 7, 2011, the only BIND version known to work with DLZ
+was 9.6-ESV-R2. BIND 9.8.0 was not tested, given the newness of the release.
+</p>
+
+</body>
+</html>
+
