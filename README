@@ -1,5 +1,63 @@
 SafeDNS
+=======
 
-Documentation and scripts will be described here.
+Penn SafeDNS 
 
-Second change here.
+Description
+===========
+
+SafeDNS is a blackhole DNS service. It protects subscribed computers from 
+malicious domains by responding with its own IP address when it receives
+DNS requests for those domains. It is configured to forward any other DNS 
+request to a recursive resolver. Thus, this service augments existing DNS
+services rather than replacing them.  
+
+Features
+========
+
+o It uses ISC BIND Dynamically-Loadable Zones with MySQL to serve a large 
+number of domains (e.g. 300,000) without noticeable downtime. 
+o It logs very little, in order to minimize privacy concerns - essentially,
+logging indicates only *that* a particular client is using the service, not
+anything about the queries it makes.
+o It includes Apache, which is configured to respond to all requests with
+a landing page explaining that a malicious domain has been blocked.
+o It includes sanity checking of malicious domain lists, as well as 
+customizable whitelists and blacklists.
+o It includes details necessary to configure both a primary and secondary
+server, with instructions for doing failover during maintenance windows.
+
+Installation
+============
+
+Start with the INSTALL file, which contains high-level instructions. At
+the appropriate point, it will refer to the INSTALL.BIND file, which contains
+detailed instructions for configuring BIND and the malicious domain updates.
+
+For gory details of the original installation of the service on Ubuntu 
+10.04 LTS, see docs/install-notes.txt. While some details of this
+distribution have changed since that installation, it does show some of the 
+commands that could be used to carry out the instructions in the INSTALL file.
+
+Reports of any errors would be appreciated, as would constructive suggestions 
+and contributions.
+
+NOTE: some elements of this release are specific to Ubuntu (10.04 LTS), but 
+the intention is to provide for use on arbitrary UNIX-like systems. Pathnames,
+network configuration, and startup configuration are the most OS-specific, but
+the BIND configuration, scripts, and documentation should be relatively
+OS-independent.
+
+Acknowledgements
+================
+
+Many thanks to drmoocow on ubuntuforums.org for describing how to configure 
+BIND to use DLZ with MySQL (http://ubuntuforums.org/showthread.php?t=823578).
+
+Thanks also to Hannes Schmidt for describing how to fix the BIND error:
+"Required token $zone$ not found." 
+(http://diaryproducts.net/about/operating_systems/unix/installing_bind9_with_dlz_and_mysql_backend_on_ubuntu_jaunty_9_04)
+
+Melissa Muth
+University of Pennsylvania
+muthm@isc.upenn.edu

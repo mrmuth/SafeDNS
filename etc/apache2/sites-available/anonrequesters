@@ -1,0 +1,7 @@
+#CustomLog /var/log/apache2/referer.log referer 
+
+CustomLog "||/usr/local/sbin/aggregate-referer" referer
+
+CustomLog /var/log/apache2/access.log anon
+CustomLog /var/log/apache2/custom.log "anon %t %{Host}i \"%r\" \"%{User-Agent}i\""
+

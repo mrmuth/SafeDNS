@@ -1,0 +1,16 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+open LAME, '>>', '/var/log/apache2/error.log';
+
+select LAME;
+$| = 1;
+
+while (<STDIN>) {
+    s/, referer: .*//;
+    s/\[client \d+\.\d+\.\d+\.\d+\] /\[client anon\] /;
+    print LAME $_;
+}
+

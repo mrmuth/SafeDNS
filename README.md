@@ -1,4 +1,0 @@
-SafeDNS
-=======
-
-Penn SafeDNS

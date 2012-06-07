@@ -1,0 +1,71 @@
+Installation 
+============
+
+This file provides an overview of the installation process. For more
+detailed notes from an example installation, see docs/install-notes.txt. 
+If you want to skip right to the BIND installation, see INSTALL.BIND (to
+which these instructions refer at the appropriate time).
+
+If a step uses files included with this distribution, those files are listed
+below that step.
+
+1. Install Ubuntu Server, installing LAMP and OpenSSH, but not BIND.
+2. Set and record password for MySQL "root" user.
+3. Update all packages.
+4. Review all files in this distribution, changing "school" as desired and
+   changing lines marked with #-#.
+5. Set root password.
+6. Install packages listed in build/dpkg-list.
+    = build/dpkg-list
+7. Configure network interfaces, if installing primary and secondary servers.
+   Add the -primary contents to the primary DNS server, the -secondary to the 
+   secondary DNS server.
+    = etc/network/interfaces-primary
+    = etc/network/interfaces-secondary
+8. Configure iptables, including redirection to dedicated log file and log 
+   rotation.
+    = etc/iptables.rules
+9. Install BIND with support for Dynamically-Loadable Zones (DLZs). 
+   For details, see INSTALL.BIND - it covers in detail what this file does
+   in steps 9 - 13.
+10. Configure BIND for DLZs using both etc/bind/named.conf.options_[12] files.
+    These are used for updating one table while the other is in use, and is
+    independent of whether you're configuring a primary or secondary too.
+    Install standard zone files (these are from Ubuntu).
+    = etc/bind/named.conf.options_1
+    = etc/bind/named.conf.options_2
+    = etc/bind/named.conf
+    = etc/bind/named.conf.default-zones
+    = etc/bind/db.0
+    = etc/bind/db.127
+    = etc/bind/db.255
+    = etc/bind/db.local
+    = etc/bind/db.root
+11. Create database objects in MySQL using sql/*.sql.
+    = sql/malware_domains.sql
+    = sql/statistics.sql
+12. Install malware domain update scripts and set to run from cron as bind.
+    = home/bind/safedns/blacklist.txt
+    = home/bind/safedns/blacklist
+    = home/bind/safedns/load_malware_domains.sh
+    = home/bind/safedns/validate_and_load.pl
+    = home/bind/safedns/whitelist.txt
+    = home/bind/safedns/whitelist
+    = var/spool/cron/crontabs/bind
+13. Start BIND, making sure it starts *after* MySQL.
+    = etc/init/bind9.conf
+14. Configure Apache to handle all 404 errors and to omit IP addresses and
+    referer from logs. The .part files provided should be incorporated into
+    existing files. Edit landing page (index.html) as desired and install in 
+    DocumentRoot.
+    = etc/apache2/apache2.conf.part
+    = etc/apache2/httpd.conf.part
+    = etc/apache2/sites-available/anonrequesters
+    = usr/local/sbin/aggregate-referer
+    = usr/local/sbin/prune-error
+    = var/www/index.html
+15. Edit and publish documentation as desired:
+    = docs/safedns-config.html (details of system and service configuration)
+    = docs/safedns-tasks.html (instructions for ongoing administrative tasks)
+    = docs/safedns-pilot.html (public page, incl. Terms of Svc, Privacy Stmt)
+

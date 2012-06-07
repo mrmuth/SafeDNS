@@ -1,0 +1,1 @@
+41 13 * * * /home/bind/safedns/load_malware_domains.sh > /home/bind/safedns/last_load.log 2>&1

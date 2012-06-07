@@ -137,8 +137,6 @@ cd ossec-hids-2.5.1/
 ./install.sh 
 /etc/init.d/ossec start
 
-Run nikto from another host; identified outdated Apache (2.2.14) but apt-get -s upgrade doesn't update it; dpkg --list does show apache2 as being installed.
-
 Add second disk so that fdisk /dev/sdb reports this (within a cylinder):
    Device Boot      Start         End      Blocks   Id  System
 /dev/sdb1   *           1       17120   137516368+  83  Linux
@@ -151,8 +149,6 @@ vi /etc/fstab
 #add line for /dev/sdb1, mounted on /backup:
 /dev/sdb1	/backup		auto	defaults	0	0
 mount /backup
-
-Copy distribution backup off of systems, saving to probe:~security/backup
 
 # make backup copy of installation
 dump -0 -f - /dev/sda1 | (cd /backup && restore -rf -)

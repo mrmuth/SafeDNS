@@ -1,0 +1,72 @@
+#!/usr/bin/perl
+
+######
+#
+# This takes a domain as an argument, e.g. www.tophi.org, and 
+# 1) Looks at dns_table_updated to determine if dns_records_1 or _2 are active;
+# 2) Inserts records in the active table; and
+# 3) Populates blacklist.txt.
+#
+#####
+
+use DBI;
+
+$BASEDIR = "/home/bind/safedns";
+$dns_ord_file = "$BASEDIR/dns_table_updated";
+$blacklist = "$BASEDIR/blacklist.txt";
+
+$db = "malware_domains";
+$host = "localhost";
+$user = "bind";
+$pass = "xxxxxxxxxx";
+$safeip=`/sbin/ifconfig eth0 | grep "inet addr" | sed 's/.*addr://' | sed 's/ *Bcast.*//'`;
+chomp $safeip;
+
+$domain = $ARGV[0];
+
+if ($domain =~ /^((\w([\w\-]{0,61}\w)?\.)*\w([\w\-]{0,61}\w)?)$/) {
+  if (length($domain) > 253) { 
+    die "Domain may not be longer than 253 characters - exiting.\n";
+    }
+  $ord = get_ordinal(); # determine if dns_records_1 or dns_records_2 is active
+  print "Ordinal of dns_records: $ord\n";
+  $inserted = insert_domain($domain, $ord);
+  if ($inserted) {
+    print "Added $inserted record into list DNS records.\n";
+    open(BLIST, ">>$blacklist") || die "Could not open $blacklist: $!\n";
+    print BLIST "$domain\n";
+    close(BLIST);
+    print "Added $inserted to blacklist for future updates.\n";
+    }
+  else { die "Could not insert record into dns_records_$ord - may exist already.\n"; }
+  }
+else {
+  die "Usage: $0 domain\n";
+  }
+
+sub insert_domain {
+  my ($dom, $i) = @_; # domain name and ordinal of active dns_records table
+  my ($stmt,$dbh, $sth);
+  $stmt = "insert into dns_records_$i (zone, host, type, data, mx_priority) \n";
+  $stmt .= "select '$dom', '*', 'A', '$safeip', null\n";
+  $stmt .= "from dns_records_$i\n";
+  $stmt .= "where not exists \n";
+  $stmt .= "(select * from dns_records_$i where zone = '$dom')\n";
+  $stmt .= "limit 1\; \n";
+  $dbh = DBI->connect("DBI:mysql:database=$db;host=$host;mysql_server_prepare=1", $user, $pass, {RaiseError => 1});
+  $sth=$dbh->prepare($stmt) || die $DBI::err.": ".$DBI::errstr;
+  $sth->execute || die DBI::err.": ".$DBI::errstr;
+  $sth=$dbh->prepare("select row_count()\;") || die $DBI::err.": ".$DBI::errstr;
+  $sth->execute || die DBI::err.": ".$DBI::errstr;
+  my $count = $sth->fetchrow_arrayref;
+  $sth->finish();
+  $dbh->disconnect();
+  return $$count[0];
+  }
+
+sub get_ordinal {
+  open(DNSORD, "$dns_ord_file") || die "Cannot open $dns_ord_file: $!\n";
+  my $ord = <DNSORD>;
+  if ($ord =~ /^[12]$/) { return $ord; }
+  else { die "$dns_ord_file contains invalid data - exiting.\n"; }
+  }

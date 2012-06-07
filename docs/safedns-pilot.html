@@ -1,0 +1,110 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html><head>
+<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+<title>School Information Security: SafeDNS</title>
+</head>
+
+<body>
+<h2>SafeDNS Pilot</h2>
+<h3>The Problem</h3>
+It has become increasingly difficult to protect client workstations from
+becoming compromised by malicious software. Even if workstations are 
+patched and running up-to-date anti-virus software, some risks remain 
+because of the:
+<ul>
+<li>Increasing prevalence of 0-day threats (attacks that exploit
+vulnerabilities for which there is no patch);
+</li><li>Incomplete effectiveness of anti-virus software in detecting polymorphic 
+malware; and 
+</li><li>Prevalence of malicious third-party ads hosted on otherwise legitimate 
+web sites.
+</li></ul>
+<h3>The Pilot</h3>
+<p>
+<em>You are invited</em> to participate in this pilot service intended to 
+protect client workstations at School from becoming infected by computers 
+known to host malware. On a daily basis, this service updates a list of 
+about 20,000 hosts that are known to be hosting malicious software. 
+
+</p>
+<h3>How it Works</h3>
+<p>
+If a workstation is configured to use this as the DNS service, any attempt to
+reach a suspected malicious host gets redirected to
+the SafeDNS server itself. Web requests from the workstation will go here:
+<a href="http://safedns1.school.edu/">http://safedns[12].school.edu/</a> instead of to a malicious host.
+</p>
+<h3>How do I join?</h3>
+<p>
+</p><ol>
+<li>If you're a Local Support Provider, feel free to try out the service 
+yourself by setting your DNS server addresses as follows:<br>
+<b>Primary:</b> a1.b1.c1.d1<br> <!- #-#>
+
+<b>Secondary:</b> a2.b2.c2.d2 <!- #-#>
+</li><li>Review the Terms of Service, below.
+</li><li>When you're ready to set up clients to use the service, 
+contact Support (<a href="mailto:itsupport@school.edu">itsupport@school.edu</a>), letting them know:
+<ul>
+<li>How many clients you'd like to add, so we can confirm that the service is
+ready to support that number; and
+</li><li>Whether you'd like to be added to a distribution list for outage 
+notifications and notices about service changes or enhancements.
+</li></ul>
+</li><li>Once we confirm that the service is ready for you to join, distribute the
+Privacy Statement below to your users.
+</li><li>Reconfigure clients to use the DNS server addresses above.
+</li><li>Give us feedback about the rate of compromises before and after joining
+the pilot (as described in the Terms of Service, below). Contact  
+Support if you see any false positives.
+</li></ol> 
+<p></p>
+<h3>Terms of Service</h3>
+
+<ul>
+<li>While we have made reasonable efforts to provide a robust and reliable
+pilot service, it is provided on a best-effort basis, with no guarantees
+about uptime, protection from false positives, or true negatives.
+</li><li>The pilot service should not be used by servers, only client 
+computers. For example, a system running a mail or web server should not
+ use the pilot service.
+</li><li>Unlike School's production DNS servers, the SafeDNS pilot servers 
+do NOT receive updates from the DNS management system immediately. Thus, if 
+you need to change a server's DNS records, make sure you lower the TTL 
+<em>in advance</em> of the 
+change to make sure any old entry is expired more quickly from the SafeDNS 
+cache.
+</li><li>Participation in the pilot is free. In the event it becomes a production
+service, it may be necessary to pay to use the service.
+</li><li>As a condition of participation in the pilot, you agree to 
+provide us with (1) reports of any subscribing clients that become 
+compromised; and (2) a comparison to the rate of compromise prior to 
+subscribing to the service, e.g. x number of computers compromised per 
+week or month.
+</li><li>Depending on the feedback received during and after the pilot, 
+it may be either discontinued or turned into a production service.
+</li><li>You agree to notify users subscribed to the service of the privacy statement we provide to you.
+</li></ul>
+<h3>What We Log</h3>
+<p>
+Only the information necessary to run or support the
+service is logged. For example, even though all DNS requests go to the 
+server, the requests themselves (e.g. for www.google.com) are not logged. 
+</p>
+<h3>Privacy Statement</h3>
+
+<p>
+The SafeDNS service reduces the likelihood that a computer will be 
+compromised through web browsing. The service does this by tracking web 
+sites known to be the source of malicious content. If the computer 
+attempts to reach such a site in the course of web browsing or other 
+activity, the service will redirect the computer to a safe location. In 
+the course of providing this service, certain information is tracked for 
+the purpose of measuring effectiveness. The information tracked includes 
+the IP address of the subscribed computer and the time of the activity. 
+The initial site (from which the computer was directed to the malicious 
+site) is also recorded, but without information that would link the 
+subscribed computer to the initial site.
+</p>
+
+</body></html>

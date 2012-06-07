@@ -1,0 +1,31 @@
+#-# Modify all IP addresses to assign roles described in comments.
+
+# The admin network interface, used in the MySQL database to refer
+# DNS queries to this host and reach the web server.
+# Also responds to DNS queries, but NOT published as a DNS server address.
+auto eth0
+iface eth0 inet static
+ address admin2.b2.c2.d2
+ netmask a.b.c.d
+ gateway a.b.c.d
+ pre-up iptables-restore < /etc/iptables.rules
+
+# Primary virtual interface used for DNS queries - 
+# production address that we publish for primary DNS server
+#manual eth0:1
+auto eth0:1
+iface eth0:1 inet static
+ address public2.b2.c2.d2
+ netmask a.b.c.d
+ gateway a.b.c.d
+
+# Secondary virtual interface used for DNS queries during maintenance - 
+# production address that we publish for primary DNS server
+# Enable manually when you need the secondary to assume primary duties 
+# temporarily while doing maintenance on primary
+manual eth0:2
+iface eth0:2 inet static
+ address public1.b1.c1.d1
+ netmask a.b.c.d
+ gateway a.b.c.d
+

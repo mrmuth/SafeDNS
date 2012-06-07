@@ -1,6 +1,7 @@
 #!/usr/bin/perl
 
-$OURDIR="/root/safedns/update";
+#-# if eth0 isn't the name of your primary interface, change the reference here
+$OURDIR="/home/bind/safedns";
 $IP=`/sbin/ifconfig eth0 | grep "inet addr" | sed 's/.*addr://' | sed 's/ *Bcast.*//'`;
 chomp $IP;
 
@@ -32,9 +33,10 @@ use Time::Local;
 $db = "malware_domains"; 
 $host = "localhost";
 $user = "bind";
-$pass = "xxxxxxxxxx";
+$pass = "xxxxxxxxxx"; #-# set to actual password for bind user in MySQL
 
 # hostname and IP address of first record to insert if database empty
+# e.g. the hostname where BIND is running
 $seed_host = 'safedns.school.edu'; #-#
 $seed_ip = $IP;
 

@@ -11,54 +11,61 @@
 <h2>SafeDNS: Maintenance</h2>
 <h4>Ad hoc tasks</h4>
 <ul>
-<li><b>Blacklist</b> a domain: log in to each safedns1 and safedns2, su to root, and run:
+<li><b>Blacklist</b> a domain: log in to each safedns1 and safedns2 as the bind 
+user, and run:
 <blockquote>
-/root/safedns/update/blacklist <em>domain</em>
+<tt>blacklist</tt> <em>domain</em>
 </blockquote>
 where <em>domain</em> is the fully-qualified domain name to be blacklisted. 
 It will be added to the currently-active list of domains (which you can verify
-by looking up the domain using nslookup) and the file containing domains to 
-be blacklisted every night.
-<li><b>Whitelist</b> a domain: log in to each safedns1 and safedns2, su to root, and run:
+by looking up the domain using dig or nslookup) and the file containing 
+domains to be blacklisted every night.
+<li><b>Whitelist</b> a domain: log in to each safedns1 and safedns2 as the
+bind user and run:
 <blockquote>
-/root/safedns/update/whitelist <em>domain</em>
+<tt>whitelist</tt> <em>domain</em>
 </blockquote>
 where <em>domain</em> is the fully-qualified domain name to be whitelisted. 
 It will be removed from the currently-active list of domains (which you can verify
-by looking up the domain using nslookup) and the file containing domains to 
-be whitelisted every night.
+by looking up the domain using dig or nslookup) and the file containing 
+domains to be whitelisted every night.
 <li><b>Remove hostname from DNS cache</b>: if someone complains that the
 SafeDNS server(s) are not seeing a change that was made to a host in
 the campus DNS management system, it's most likely because they didn't 
-reduce the TTL in order to force the record update to propagae. To work 
+reduce the TTL in order to allow the record update to propagae. To work 
 around this, flush the 
-<em>hostname</em> from the SafeDNS cache: <tt>rndc flushname hostname</tt> replacing <tt>hostname</tt> appropriately. This must be done on both safedns1 and 
+<em>hostname</em> from the SafeDNS cache: 
+<blockquote>
+<tt>rndc flushname </tt><em>hostname</em>
+</blockquote>
+replacing <em>hostname</em> appropriately. This must be done on both safedns1 and 
 safedns2.
 </ul>
 <h4>To reboot safedns1</h4>
 <p>
 This assumes safedns1-svc still has the IP address 
-A1.B1.C1.D1. If not, amend these directions accordingly. You should always 
-connect to safedns[12], not safedns[12]-svc, since the -svc
+public1.B1.C1.D1. You should always connect to safedns[12] 
+(admin[12].B[12].C[12].D[12]), not safedns[12]-svc 
+(public[12].B[12].C[12].D[12]), since the -svc
 IP address is the one you're moving around, and you don't want to disconnect
 yourself.
 </p>
 <ol> 
-<li>Use <tt>dig @A1.B1.C1.D1 hostname +short</tt> for a few hostnames (e.g. 
+<li>Use <tt>dig @public1.B1.C1.D1 hostname +short</tt> for a few hostnames (e.g. 
 an on-campus host, known off-campus host, and malicious host listed in 
-/root/safedns/update/malwaredomains) to verify lookups are happening correctly.
-<li>On probe or your workstation, start a long-running ping of 
-<tt>A1.B1.C1.D1</tt>.
+/home/bind/safedns/malwaredomains) to verify lookups are happening correctly.
+<li>On your workstation, start a long-running ping of 
+<tt>public1.B1.C1.D1</tt>.
 <li>On safedns1 as root, type (but don't press enter): 
 <tt>ifdown eth0:1</tt> 
 <li>On safedns2 as root, type (but don't press enter): 
-<tt>ifup eth0:2; arping -U -I eth0 A1.B1.C1.D1</tt> 
+<tt>ifup eth0:2; arping -U -I eth0 public1.B1.C1.D1</tt> 
 <li>On safedns1, press enter. As soon as the long-running ping stops
 getting a response, press enter on safedns2.
-<li>As soon as <tt>A1.B1.C1.D1</tt> returns pings again, press Ctrl-C 
+<li>As soon as <tt>public1.B1.C1.D1</tt> returns pings again, press Ctrl-C 
 on safedns2 to stop the arping.
 <li>Do <tt>rndc reload</tt> on safedns2.
-<li>Use <tt>dig @A1.B1.C1.D1 hostname +short</tt> again to make sure DNS service is 
+<li>Use <tt>dig @public1.B1.C1.D1 hostname +short</tt> again to make sure DNS service is 
 working for that IP.
 </ol>
 At this point, safedns2 should be playing the role of safedns1 as well.
@@ -73,14 +80,14 @@ become root.
 <li>On safedns2 as root, type (but don't press enter): 
 <tt>ifdown eth0:2</tt>
 <li>On safedns1 as root, type (but don't press enter):
-<tt>ifup eth0:1; arping -U -I eth0 A1.B1.C1.D1</tt> 
+<tt>ifup eth0:1; arping -U -I eth0 public1.B1.C1.D1</tt> 
 <li>On safedns2, press enter. As soon as the long-running ping stops
 getting a response, press enter on safedns1.
-<li>Press Ctrl-C on safedns1 to stop the <tt>arping</tt> once A1.B1.C1.D1 
+<li>Press Ctrl-C on safedns1 to stop the <tt>arping</tt> once public1.B1.C1.D1 
 is pingable.
 <li>Do an <tt>rndc reload</tt> on both hosts for good measure (sometimes
 BIND doesn't handle the change of interfaces gracefully).
-<li>Use <tt>dig @A1.B1.C1.D1 hostname +short</tt> as before,
+<li>Use <tt>dig @public1.B1.C1.D1 hostname +short</tt> as before,
 to verify lookups are happening correctly after maintenance.
 <li>Use <tt>tail -f /var/log/iptables.log</tt> on both hosts to make sure 
 queries are being processed.
@@ -91,27 +98,28 @@ At this point, safedns1 and safedns2 are back to their usual roles.
 <h4>To reboot safedns2</h4>
 <p>
 This assumes safedns2-svc still has the IP address 
-A2.B2.C2.D2. If not, amend these directions accordingly. You should always 
-connect to safedns[12], not safedns[12]-svc, since the -svc
+public2.B2.C2.D2. You should always connect to safedns[12] 
+(admin[12].B[12].C[12].D[12]), not safedns[12]-svc 
+(admin[12].B[12].C[12].D[12]), since the -svc
 IP address is the one you're moving around, and you don't want to disconnect
 yourself.
 </p>
 <ol> 
-<li>Use <tt>dig @A2.B2.C2.D2 hostname +short</tt> for a few hostnames (e.g. 
+<li>Use <tt>dig @public2.B2.C2.D2 hostname +short</tt> for a few hostnames (e.g. 
 an on-campus host, known off-campus host, and a malicious host listed in 
-/root/safedns/update/malwaredomains) to verify lookups are happening correctly.
-<li>On probe or your workstation, start a long-running ping of 
-<tt>A2.B2.C2.D2</tt>.
+/home/bind/safedns/malwaredomains) to verify lookups are happening correctly.
+<li>On your workstation, start a long-running ping of 
+<tt>public2.B2.C2.D2</tt>.
 <li>On safedns2 as root, type (but don't press enter): 
 <tt>ifdown eth0:1</tt> 
 <li>On safedns1 as root, type (but don't press enter): 
-<tt>ifup eth0:2; arping -U -I eth0 A2.B2.C2.D2</tt> 
+<tt>ifup eth0:2; arping -U -I eth0 public2.B2.C2.D2</tt> 
 <li>On safedns2, press enter. As soon as the long-running ping stops
 getting a response, press enter on safedns1.
-<li>As soon as <tt>A2.B2.C2.D2</tt> returns pings again, press Ctrl-C 
+<li>As soon as <tt>public2.B2.C2.D2</tt> returns pings again, press Ctrl-C 
 on safedns1 to stop the arping.
 <li>Do <tt>rndc reload</tt> on safedns1.
-<li>Use <tt>dig @A2.B2.C2.D2 hostname +short</tt> again to make sure DNS service is 
+<li>Use <tt>dig @public2.B2.C2.D2 hostname +short</tt> again to make sure DNS service is 
 working for that IP. 
 </ol>
 At this point, safedns1 should be playing the role of safedns2 as well.
@@ -126,14 +134,14 @@ become root.
 <li>On safedns1 as root, type (but don't press enter): 
 <tt>ifdown eth0:2</tt>
 <li>On safedns2 as root, type (but don't press enter):
-<tt>ifup eth0:1; arping -U -I eth0 A2.B2.C2.D2</tt> 
+<tt>ifup eth0:1; arping -U -I eth0 public2.B2.C2.D2</tt> 
 <li>On safedns1, press enter. As soon as the long-running ping stops
 getting a response, press enter on safedns2.
-<li>Press Ctrl-C on safedns2 to stop the <tt>arping</tt> once A2.B2.C2.D2 
+<li>Press Ctrl-C on safedns2 to stop the <tt>arping</tt> once public2.B2.C2.D2 
 is pingable.
 <li>Do an <tt>rndc reload</tt> on both hosts for good measure (sometimes
 BIND doesn't handle the change of interfaces gracefully).
-<li>Use <tt>dig @A2.B2.C2.D2 hostname +short</tt> as before,
+<li>Use <tt>dig @public2.B2.C2.D2 hostname +short</tt> as before,
 to verify lookups are happening correctly after maintenance.
 <li>Use <tt>tail -f /var/log/iptables.log</tt> on both hosts to make sure 
 queries are being processed.

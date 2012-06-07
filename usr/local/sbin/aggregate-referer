@@ -1,0 +1,57 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use DBI;
+my $DEBUG = 1;
+
+if ($DEBUG) { 
+  open(DEBUG, ">>/var/log/apache2/debug-referer.log") 
+	|| die "Cannot open debug-referer.log: $!\n";
+  select((select(DEBUG), $|=1)[0]); # disable output buffering
+  }
+
+my $db = "statistics";
+my $host = "localhost";
+my $user = "stat";
+my $pass = "xxxxxxxxxx"; #-# set to actual password
+
+if ($DEBUG) {
+  print DEBUG "Loaded DBI, set variables\n";
+  print DEBUG "Connecting to database $db on $host as $user\n";
+  }
+
+my $dbh = DBI->connect("DBI:mysql:database=$db;host=$host;mysql_server_prepare=1", $user, $pass, {RaiseError => 1});
+
+if ($DEBUG) { print DEBUG "Connected.\n"; }
+
+my $http_regex = http_url_match_regex();
+my $domain;
+
+while (<>) {
+  chomp;
+  if ($DEBUG) { print DEBUG "Got input $_\n"; }
+  if (m{$http_regex}g) {
+    $domain = $2;
+    if ($DEBUG) { 
+      print DEBUG "Calling statistics.increment_count('$domain')\n"; 
+      }
+    }
+  else { 
+    if ($DEBUG) { print DEBUG "Could not match domain $_\n"; }
+    next; 
+    }
+  my $sth=$dbh->prepare("call statistics.increment_count('$domain')") || die $DBI::err.": ".$DBI::errstr;
+  $sth->execute || die DBI::err.": ".$DBI::errstr;
+  }
+
+if ($DEBUG) { print DEBUG "Disconnecting...\n"; }
+
+$dbh->disconnect();
+
+sub http_url_match_regex {
+    return
+      #qr{(?i)\b((?:https?://|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'".,<>?«»“”‘’]))}; # orig
+      qr{(?i)\b((?:https?://(|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4})/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'".,<>?«»“”‘’]))}; # orig
+  }
+

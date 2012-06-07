@@ -1,0 +1,4 @@
+#ErrorLog /var/log/apache2/error.log
+ErrorLog "|/usr/local/sbin/prune-error"
+
+LogFormat "anon %l %u %t anon-req %>s %O" anon

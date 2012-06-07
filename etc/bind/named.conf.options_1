@@ -1,12 +1,12 @@
-// subnets we wish to allow queries from. 
-acl localnet { A.B.C.D/16; }; 
+// subnets we wish to allow queries from.  #-#
+acl localnet { A.B.C.D/X; }; 
 
 options { 
   directory "/var/cache/bind"; // Working directory 
   version "generic";
   forward only;
   forwarders { 
-    A.B.C.D;
+    A.B.C.D; // #-#
     };
   allow-transfer { none; }; 
   allow-query { localnet; }; 
@@ -27,8 +27,7 @@ logging {
       channel audit_log {
             // Send the security related messages to a separate file.
             file "/var/log/named/named.log";
-            //severity debug;
-            severity info;
+            severity debug;
             print-time yes; 
       };
 
@@ -55,9 +54,11 @@ logging {
 
 };
 
+// Redirect all queries for malware domains to captive portal on this host
+
 dlz "Mysql zone" {
    database "mysql
-   {host=127.0.0.1 dbname=malware_domains user=bind pass=xxxxxxxxxx}
-   {select zone from dns_records_2 where zone = '%zone%'}
-   {select ttl, type, mx_priority, case when lower(type)='txt' then concat('\"', data, '\"') when lower(type) = 'soa' then concat_ws(' ', data, resp_person, serial, refresh, retry, expire, minimum) else data end from dns_records_2 where zone = '%zone%' and host = '%record%'}";
+   {host=127.0.0.1 dbname=malware_domains user=bind pass=xxxxxxxxxx} // #-#
+   {select zone from dns_records_1 where zone = '$zone$'}
+   {select ttl, type, mx_priority, case when lower(type)='txt' then concat('\"', data, '\"') when lower(type) = 'soa' then concat_ws(' ', data, resp_person, serial, refresh, retry, expire, minimum) else data end from dns_records_1 where zone = '$zone$' and host = '$record$'}";
   };

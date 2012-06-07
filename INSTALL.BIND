@@ -1,0 +1,83 @@
+BIND Installation and Malware Domain Update Configuration Instructions
+======================================================================
+Notes:
+- These instructions assume $DIST is the directory where this distribution
+has been downloaded/unpacked. It should have the README and INSTALL files, 
+var and home directories, etc.
+- Where noted, files from the distribution must be modified for your specific
+environment, typically hostnames, IP address ranges, and passwords. To find
+the specific lines to be modified, look for school.edu and #-# in the files.
+The exception is the .sql files, where there are no comments, but the actual
+password must be provided.
+- Most steps require sudo or root privileges, and are denoted with an 
+initial "#".
+
+1. Download the latest version of BIND (see docs/safedns-config.html for 
+details about versions prior to 9.9.1-P1):
+# mkdir /usr/local/src
+# cd /usr/local/src
+# wget ftp://ftp.isc.org/isc/bind9/9.9.1-P1/bind-9.9.1-P1.tar.gz
+# gunzip -c bind-9.9.1-P1.tar.gz | tar xvf -
+# cd bind-9.9.1-P1
+
+2. Build BIND with --with-dlz options:
+# ./configure --prefix=/usr --mandir=/usr/share/man --infodir=/usr/share/info --sysconfdir=/etc/bind --localstatedir=/var --enable-threads --enable-largefile --with-libtool --enable-shared --enable-static --with-openssl=/usr --with-gssapi=/usr --with-gnu-ld --with-dlz-postgres=no --with-dlz-mysql --with-dlz-bdb=yes --with-dlz-filesystem=yes --with-dlz-ldap=yes --with-dlz-stub=yes --with-geoip=/usr --enable-ipv6 'CFLAGS=-fno-strict-aliasing -DDIG_SIGCHASE -O2' 'LDFLAGS=-Wl,-Bsymbolic-functions' 'CPPFLAGS='
+# make
+# make install
+
+3. Create database objects:
+% cd $DIST
+- Edit sql/malware_domains.sql:
+  - replace xxxxxxxxxx with your chosen password for the bind user in MySQL;
+  - replace user.host.school.edu.email as appropriate to match your own
+  user@host.school.edu address; and
+  - replace safedns.school.edu with your actual SafeDNS server hostname.
+- Edit sql/statistics.sql replacing xxxxxxxxxx with your chosen password for 
+  the statistics user in MySQL
+% mysql --user=root --password
+[enter MySQL's root password defined when MySQL was installed]
+\. sql/malware_domains.sql
+\. sql/statistics.sql
+
+4. Configure BIND:
+# adduser --home /home/bind --gecos "BIND user" bind
+# cd $DIST/etc/bind
+- Edit both named.conf.options_[12] files in sections marked with #-#, to set 
+networks to be provided service, and the password for the *MySQL* bind user.
+# cp * /etc/bind
+# chown bind:bind /var/log/named
+# chown -R bind:bind /etc/bind
+# cd /etc/bind && ln -s named.conf.options_1 named.conf.options
+- As bind user:
+% /usr/local/sbin/rndc-confgen -a
+
+5. Add startup scripts for BIND to ensure it starts *after* MySQL:
+# cp $DIST/etc/init/bind9.conf /etc/init
+-> Edit /etc/init/bind9.conf, changing "net-device-up" requirements if needed. 
+The default file assumes the system is configured to do failover between
+primary and secondary. If only one will be installed, remove the dependency
+on the interface that is not configured (per /etc/network/interfaces).
+
+6. If using a Collective Intelligence Framework (CIF) feed for malware domains
+such as SES from REN-ISAC (http://www.ren-isac.net/ses/):
+- Create an API key (see your provider for details).
+- Install CIF perl client:
+https://code.google.com/p/collective-intelligence-framework/wiki/PerlClient
+- Populate ~bind/.cif using details for your feed:
+https://code.google.com/p/collective-intelligence-framework/wiki/GlobalConfigurationFile
+
+7. Configure updates of malware domains:
+- Edit $DIST/home/bind/safedns files as needed, modifying school.edu 
+  and providing the actual password for the *MySQL* bind user.
+- Copy update scripts into place and create archive directory:
+# cd $DIST/home/bind && cp -r safedns ~bind
+# mkdir ~bind/safedns/archive
+# chown -R bind:bind ~bind/safedns
+- As bind user:
+% /home/safedns/update/load_malware_domains.sh 
+to populate MySQL database with malware domains.
+- Edit crontab for bind user, adding the following (at whatever time you wish):
+41 1 * * * /home/bind/safedns/load_malware_domains.sh > /home/bind/safedns/last_load.log 2>&1
+If you're configuring both primary *and* secondary SafeDNS servers, you may 
+wish to do the load at different times, to mitigate risk of a bad malware
+domain load.
