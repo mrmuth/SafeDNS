@@ -34,19 +34,28 @@ Start with the INSTALL file, which contains high-level instructions. At
 the appropriate point, it will refer to the INSTALL.BIND file, which contains
 detailed instructions for configuring BIND and the malicious domain updates.
 
-For gory details of the original installation of the service on Ubuntu 
-10.04 LTS, see docs/install-notes.txt. While some details of this
-distribution have changed since that installation, it does show some of the 
-commands that could be used to carry out the instructions in the INSTALL file.
+For gory details of the original installation of the service see 
+docs/install-notes.txt. While some details of this distribution have changed 
+since that installation, it does show some of the commands that could be 
+used to carry out the instructions in the INSTALL file.
 
 Reports of any errors would be appreciated, as would constructive suggestions 
 and contributions.
 
-NOTE: some elements of this release are specific to Ubuntu (10.04 LTS), but 
-the intention is to provide for use on arbitrary UNIX-like systems. Pathnames,
+UNIX-like systems:
+
+Some elements of this release are specific to Ubuntu (10.04 LTS), but 
+the intention is to allow for use on arbitrary UNIX-like systems. Pathnames,
 network configuration, and startup configuration are the most OS-specific, but
 the BIND configuration, scripts, and documentation should be relatively
 OS-independent.
+
+Red Hat Enterprise Linux 6 (RHEL6):
+
+A member of the user community kindly reported that if you install the 
+bind-sbd package from the optional channel, you can use the BIND 
+distribution that ships with the OS - no compilation of BIND is 
+needed. 
 
 Acknowledgements
 ================
