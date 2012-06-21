@@ -50,6 +50,19 @@ network configuration, and startup configuration are the most OS-specific, but
 the BIND configuration, scripts, and documentation should be relatively
 OS-independent.
 
+Ubuntu 12.02
+
+A member of the user community kindly reported that if you wish to install BIND 
+from a Debian package (as opposed to building the current ISC BIND version from 
+source) do the following instead of steps 1 and 2 in INSTALL.BIND:
+
+ 1. Do 'apt-get source bind9', 
+ 2. Add the DLZ options to 'bind9-9.8.1.dfsg.P1/debian/rules'
+ 3. Remove the #ifdef and #endif lines from 
+    bind9-9.8.1.dfsg.P1/contrib/dlz/drivers/sdlz_helper.c
+    q.v. http://www.mail-archive.com/bind-users@lists.isc.org/msg11047.html
+ 4. Compile packages with 'dpkg-buildpackage -rfakeroot -b' 
+
 Red Hat Enterprise Linux 6 (RHEL6):
 
 A member of the user community kindly reported that if you install the 
