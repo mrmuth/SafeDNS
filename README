@@ -70,6 +70,13 @@ bind-sbd package from the optional channel, you can use the BIND
 distribution that ships with the OS - no compilation of BIND is 
 needed. 
 
+However, if used with MySQL, BIND will have to be run single-threaded.
+In /etc/init.d/named, add '-n 1' to the named invocation to avoid a crash 
+when more than one request is received at a time, e.g.
+
+	daemon --pidfile "$ROOTDIR/$PIDFILE" /usr/sbin/"$named" -u named \
+		-n 1 ${OPTIONS};
+
 Acknowledgements
 ================
 
